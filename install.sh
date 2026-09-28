@@ -120,7 +120,9 @@ sudo apt install -y linux-oem-24.04d linux-headers-oem-24.04d
 echo "[3/7] OEM-Kernel als GRUB-Default setzen"
 
 # GRUB_DEFAULT=saved + grub-set-default: unabhängig vom Release-Namen
-# (Wilma/Zena/...), der Eintrag wird aus der generierten grub.cfg gelesen.
+# (Wilma/Zena/...). Gesucht wird über die menuentry-IDs in grub.cfg, nicht
+# über die Titel (die sind je nach Locale übersetzt). grub.cfg ist nur für
+# root lesbar, daher sudo.
 if grep -q '^GRUB_DEFAULT=' "$GRUB_FILE"; then
     sudo sed -i 's|^GRUB_DEFAULT=.*|GRUB_DEFAULT=saved|' "$GRUB_FILE"
 else
@@ -131,12 +133,13 @@ sudo update-grub
 OEM_VERSION="$(dpkg -l | awk '/^ii.*linux-image-.*-oem/ {print $2}' \
     | grep -oP '\d+\.\d+\.\d+-\d+-oem' | sort -V | tail -1 || true)"
 
+GRUB_CFG=/boot/grub/grub.cfg
 if [[ -n "$OEM_VERSION" ]]; then
-    SUBMENU="$(grep -oP "^submenu '\K[^']+" /boot/grub/grub.cfg | head -1 || true)"
-    ENTRY="$(grep -oP "menuentry '\K[^']*with Linux ${OEM_VERSION}(?=')" /boot/grub/grub.cfg | head -1 || true)"
-    if [[ -n "$SUBMENU" && -n "$ENTRY" ]]; then
-        sudo grub-set-default "${SUBMENU}>${ENTRY}"
-        echo "      → Default: ${SUBMENU}>${ENTRY}"
+    SUBMENU_ID="$(sudo grep -oP "^submenu .*'\Kgnulinux-advanced-[^']+" "$GRUB_CFG" | head -1 || true)"
+    ENTRY_ID="$(sudo grep -oP "'\Kgnulinux-${OEM_VERSION}-advanced-[^']+" "$GRUB_CFG" | head -1 || true)"
+    if [[ -n "$SUBMENU_ID" && -n "$ENTRY_ID" ]]; then
+        sudo grub-set-default "${SUBMENU_ID}>${ENTRY_ID}"
+        echo "      → Default: $OEM_VERSION"
     else
         echo "      WARNUNG: GRUB-Eintrag für $OEM_VERSION nicht gefunden — beim Booten manuell wählen!"
     fi
